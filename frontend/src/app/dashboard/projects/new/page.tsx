@@ -5,6 +5,7 @@ import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { api } from "@/lib/api";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -47,21 +48,74 @@ const projectTypes = [
   },
 ];
 
+const aiSuggestions = [
+  { label: "Compare machine learning algorithms", prompt: "Write a comparative analysis of common machine learning algorithms including decision trees, neural networks, and SVM" },
+  { label: "Marketing strategy plan", prompt: "Create a comprehensive digital marketing strategy for a new SaaS product targeting small businesses" },
+  { label: "Literature review structure", prompt: "Write a literature review on the impact of social media on student engagement in higher education" },
+  { label: "Business case study", prompt: "Analyze the business model disruption of Airbnb in the hospitality industry" },
+];
+
 export default function NewProjectPage() {
   const router = useRouter();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [selectedType, setSelectedType] = useState("essay");
   const [creating, setCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [useAi, setUseAi] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [generatedTitle, setGeneratedTitle] = useState("");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!title.trim()) return;
     setCreating(true);
-    // TODO: Connect to API when available
-    setTimeout(() => {
+    setError(null);
+
+    try {
+      const project = await api.createProject({
+        title,
+        description: description || undefined,
+        type: selectedType,
+      });
+
+      if (aiPrompt.trim()) {
+        try {
+          await api.generateContent({
+            prompt: aiPrompt,
+            documentType: selectedType,
+            projectId: project.id,
+          });
+        } catch (genErr) {
+          console.error("AI generation failed, but project was created:", genErr);
+        }
+      }
+
+      router.push(`/dashboard/projects/${project.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create project");
       setCreating(false);
-      router.push("/dashboard");
-    }, 1000);
+    }
+  }
+
+  async function handleAiSuggest() {
+    if (!aiPrompt.trim() && !description.trim()) return;
+    setAiGenerating(true);
+    try {
+      const promptToUse = aiPrompt || `Create a project for: ${description}`;
+      const result = await api.generateContent({
+        prompt: `Based on the following topic, generate only a project title (1 line, max 80 characters): ${promptToUse}`,
+        documentType: selectedType,
+      });
+      const suggestedTitle = result.content.split("\n")[0].replace(/^#*\s*/, "").slice(0, 80);
+      setGeneratedTitle(suggestedTitle);
+      setTitle(suggestedTitle);
+    } catch {
+      setError("AI title generation failed. Please enter a title manually.");
+    } finally {
+      setAiGenerating(false);
+    }
   }
 
   return (
@@ -73,6 +127,12 @@ export default function NewProjectPage() {
             &larr; Back to projects
           </Link>
         </div>
+
+        {error && (
+          <div className="mb-4 p-3 bg-error/10 border border-error/30 rounded-lg text-error text-body-sm" role="alert">
+            {error}
+          </div>
+        )}
 
         <Card>
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -88,21 +148,21 @@ export default function NewProjectPage() {
             <div>
               <label className="block text-text-primary font-medium text-body-sm mb-1.5">Project type</label>
               <div className="grid grid-cols-2 gap-3">
-              {projectTypes.map((type) => (
-                <button
-                  key={type.id}
-                  type="button"
-                  onClick={() => setSelectedType(type.id)}
-                  className={`p-4 rounded-lg border text-left transition-all ${
-                    selectedType === type.id
-                      ? "border-primary bg-primary/5"
-                      : "border-border hover:border-primary/30"
-                  }`}
-                >
-                  <div className="text-primary mb-1">{type.icon}</div>
-                  <div className="text-body-sm font-medium text-text-primary">{type.label}</div>
-                </button>
-              ))}
+                {projectTypes.map((type) => (
+                  <button
+                    key={type.id}
+                    type="button"
+                    onClick={() => setSelectedType(type.id)}
+                    className={`p-4 rounded-lg border text-left transition-all ${
+                      selectedType === type.id
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:border-primary/30"
+                    }`}
+                  >
+                    <div className="text-primary mb-1">{type.icon}</div>
+                    <div className="text-body-sm font-medium text-text-primary">{type.label}</div>
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -118,6 +178,86 @@ export default function NewProjectPage() {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
               />
+            </div>
+
+            {/* AI Integration Section */}
+            <div className="border border-border rounded-lg p-4">
+              <button
+                type="button"
+                onClick={() => setUseAi(!useAi)}
+                className="flex items-center gap-2 text-body-sm font-medium text-text-primary hover:text-primary transition-colors mb-3"
+              >
+                <svg className={`w-4 h-4 transition-transform ${useAi ? "rotate-90" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                  <path d="M9 5l7 7-7 7" />
+                </svg>
+                <svg className="w-4 h-4 text-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                Generate with AI
+              </button>
+
+              {useAi && (
+                <div className="space-y-3">
+                  {!description.trim() && (
+                    <div className="flex flex-wrap gap-2">
+                      {aiSuggestions.map((s) => (
+                        <button
+                          key={s.label}
+                          type="button"
+                          onClick={() => {
+                            setAiPrompt(s.prompt);
+                            setDescription(s.prompt);
+                          }}
+                          className="px-3 py-1 rounded-full text-caption bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                        >
+                          {s.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  <div>
+                    <textarea
+                      rows={3}
+                      className="w-full px-4 py-3 bg-surface border border-border rounded-lg text-text-primary placeholder-text-secondary text-body-sm focus:outline-none focus:ring-2 focus:ring-secondary/30 focus:border-secondary resize-none"
+                      placeholder="Describe your topic and what you'd like AI to generate..."
+                      value={aiPrompt}
+                      onChange={(e) => setAiPrompt(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleAiSuggest}
+                      disabled={aiGenerating || (!aiPrompt.trim() && !description.trim())}
+                    >
+                      {aiGenerating ? (
+                        <>
+                          <svg className="animate-spin -ml-1 mr-2 h-3 w-3" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                          </svg>
+                          Generating title...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4 mr-1 text-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                          Auto-generate title
+                        </>
+                      )}
+                    </Button>
+                    {generatedTitle && (
+                      <span className="text-caption text-secondary">Title generated — you can edit it</span>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex gap-3">

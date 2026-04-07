@@ -1,7 +1,10 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { api } from "@/lib/api";
+import type { UsageStats } from "@/lib/api";
 
 const navItems = [
   { label: "Dashboard", href: "/dashboard", icon: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" },
@@ -15,6 +18,63 @@ interface SidebarProps {
   collapsed?: boolean;
   mobileOpen?: boolean;
   onMobileClose?: () => void;
+}
+
+function UsageCounter({ collapsed }: { collapsed: boolean }) {
+  const [usage, setUsage] = useState<UsageStats | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const data = await api.getUsageStats();
+        setUsage(data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : null);
+      }
+    }
+    load();
+  }, []);
+
+  if (error || !usage) return null;
+
+  const remaining = Math.max(0, usage.documentLimit - usage.documentsThisMonth);
+  const pct = Math.min(100, (usage.documentsThisMonth / usage.documentLimit) * 100);
+  const isCritical = remaining === 0;
+  const isLow = remaining <= 1;
+  const barColor = isCritical ? "bg-error" : isLow ? "bg-accent" : "bg-secondary";
+
+  if (collapsed) {
+    return (
+      <div className="px-2 py-1 text-center" title={`${remaining} of ${usage.documentLimit} remaining`}>
+        <div className="w-full h-1.5 bg-border rounded-full overflow-hidden">
+          <div className={`h-full ${barColor} rounded-full`} style={{ width: `${pct}%` }} />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-3 py-2">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-caption text-text-secondary font-medium">Usage this month</span>
+        <span className={`text-caption font-bold ${isCritical ? "text-error" : isLow ? "text-accent" : "text-secondary"}`}>
+          {remaining} left
+        </span>
+      </div>
+      <div className="w-full h-1.5 bg-border rounded-full overflow-hidden mb-1">
+        <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
+      </div>
+      <p className="text-caption text-text-secondary">
+        {usage.documentsThisMonth}/{usage.documentLimit} documents used
+      </p>
+      {usage.currentTier === "free" && (
+        <Link href="/dashboard/upgrade" className="text-caption text-primary font-medium hover:underline mt-1 inline-block">
+          Upgrade to Pro &rarr;
+        </Link>
+      )}
+    </div>
+  );
 }
 
 export function Sidebar({ collapsed = false, mobileOpen = false, onMobileClose }: SidebarProps) {
@@ -33,7 +93,7 @@ export function Sidebar({ collapsed = false, mobileOpen = false, onMobileClose }
           mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         } ${
           collapsed ? "lg:w-16" : "lg:w-60"
-        } w-60`}
+        } w-60 flex flex-col`}
       >
         <div className={`${collapsed ? "lg:px-2" : "px-4"} p-4 border-b border-border`}>
           <Link href="/dashboard" className="text-lg font-bold text-text-primary">
@@ -67,23 +127,27 @@ export function Sidebar({ collapsed = false, mobileOpen = false, onMobileClose }
           </ul>
         </nav>
 
-        <div className="p-4 border-t border-border space-y-2">
-          <Link
-            href="/dashboard/upgrade"
-            onClick={onMobileClose}
-            className="flex items-center gap-3 px-3 py-2 rounded text-body-sm bg-accent/10 text-accent font-medium hover:bg-accent/20 transition-colors"
-          >
-            <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-            {!collapsed && <span>Upgrade to Pro</span>}
-          </Link>
-          <button className="flex items-center gap-3 px-3 py-2 w-full rounded text-body-sm text-text-secondary hover:bg-gray-100 transition-colors">
-            <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            {!collapsed && <span>Help &amp; Support</span>}
-          </button>
+        <div className={`p-3 border-t border-border ${collapsed ? "lg:px-1" : ""}`}>
+          {!collapsed && <UsageCounter collapsed={collapsed} />}
+          {collapsed && <UsageCounter collapsed />}
+          <div className="flex flex-col gap-1 mt-1">
+            <Link
+              href="/dashboard/upgrade"
+              onClick={onMobileClose}
+              className="flex items-center gap-3 px-3 py-2 rounded text-body-sm bg-accent/10 text-accent font-medium hover:bg-accent/20 transition-colors"
+            >
+              <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              {!collapsed && <span>Upgrade to Pro</span>}
+            </Link>
+            <button className="flex items-center gap-3 px-3 py-2 w-full rounded text-body-sm text-text-secondary hover:bg-gray-100 transition-colors">
+              <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              {!collapsed && <span>Help &amp; Support</span>}
+            </button>
+          </div>
         </div>
       </aside>
     </>
