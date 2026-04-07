@@ -33,6 +33,7 @@ model User {
   documents     Document[]
   usageLogs     UsageLog[]
   refreshTokens RefreshToken[]
+  apiKeys       ApiKey[]
 }
 
 model RefreshToken {
@@ -64,8 +65,10 @@ model Project {
 model Document {
   id        String   @id @default(uuid())
   title     String
-  content   String
+  content   String   @default("")
   format    String   @default("pdf")
+  type      String?
+  status    String   @default("completed")
   projectId String?
   userId    String
   createdAt DateTime @default(now())
@@ -76,6 +79,7 @@ model Document {
 
   @@index([userId])
   @@index([projectId])
+  @@index([status])
 }
 
 model ApiKey {
@@ -83,11 +87,18 @@ model ApiKey {
   name      String
   key       String
   provider  String
+  userId    String
   isActive  Boolean  @default(true)
   usageLimit Int     @default(1000)
   usedCount Int      @default(0)
+  errorCount Int     @default(0)
+  lastErrorAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model UsageLog {

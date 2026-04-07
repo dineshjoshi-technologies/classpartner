@@ -8,45 +8,61 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { SkeletonText } from "@/components/ui/skeleton";
+import { api } from "@/lib/api";
+
+const subjectMap: Record<string, string> = {
+  cs: "Computer Science",
+  business: "Business",
+  arts: "Arts & Humanities",
+  science: "Natural Sciences",
+};
 
 export default function DocumentEditorPage() {
   const router = useRouter();
   const [prompt, setPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedContent, setGeneratedContent] = useState("");
+  const [generatedDocumentId, setGeneratedDocumentId] = useState<string | null>(null);
   const [selectedFormat, setSelectedFormat] = useState("essay");
   const [selectedCitation, setSelectedCitation] = useState("apa");
   const [wordCount, setWordCount] = useState(1500);
   const [subject, setSubject] = useState("");
+  const [generationError, setGenerationError] = useState<string | null>(null);
 
   async function handleGenerate() {
     if (!prompt.trim()) return;
     setIsGenerating(true);
+    setGenerationError(null);
 
-    setTimeout(() => {
-      setGeneratedContent(
-        `# The Impact of Artificial Intelligence on Academic Research\n\n` +
-        `## Introduction\n\n` +
-        `Artificial intelligence has fundamentally transformed the landscape of academic research. From literature reviews to data analysis, AI tools are becoming indispensable for researchers across disciplines. This essay explores the multifaceted impact of AI on academic practices, examining both the opportunities it presents and the challenges it introduces.\n\n` +
-        `## AI-Powered Literature Review\n\n` +
-        `One of the most significant applications of AI in academic research is the ability to process and synthesize large volumes of literature. Natural language processing algorithms can now identify relevant papers, extract key findings, and even detect gaps in existing research. This capability dramatically reduces the time researchers spend on preliminary literature surveys.\n\n` +
-        `According to Smith et al. (2024), AI-assisted literature reviews can reduce initial research time by up to 60%, allowing scholars to focus on higher-order analytical tasks and hypothesis development.\n\n` +
-        `## Methodological Innovations\n\n` +
-        `AI has introduced novel methodological approaches across various fields:\n\n` +
-        `- **Qualitative Analysis**: Machine learning models can now identify patterns in textual data that would be impractical for human analysts to detect manually.\n\n` +
-        `- **Quantitative Research**: Advanced statistical learning algorithms can handle complex multivariate analyses with unprecedented accuracy.\n\n` +
-        `- **Experimental Design**: AI-powered simulation environments allow researchers to test hypotheses in controlled virtual settings before committing resources to physical experiments.\n\n` +
-        `## Ethical Considerations and Academic Integrity\n\n` +
-        `While the benefits are substantial, the integration of AI in academia raises significant ethical questions. Issues of authorship, originality, and the appropriate role of machine-generated content in scholarly work remain actively debated.\n\n` +
-        `Institutions worldwide are developing new guidelines and policies to address these challenges, seeking to balance the productive use of AI tools with the maintenance of academic standards and integrity.`
-      );
+    try {
+      const result = await api.generateContent({
+        prompt,
+        documentType: selectedFormat,
+        subject: subjectMap[subject] || subject,
+        citationStyle: selectedCitation,
+        wordCount,
+      });
+      setGeneratedContent(result.content);
+      setGeneratedDocumentId(result.documentId);
+    } catch (err) {
+      const message = err instanceof Error
+        ? err.message
+        : "AI generation is not yet connected. The backend /api/generate route needs to be implemented to power this feature.";
+      setGenerationError(message);
+    } finally {
       setIsGenerating(false);
-    }, 3000);
+    }
   }
 
   function handleExport(format: string) {
-    // TODO: Implement actual export
     console.log(`Exporting as ${format}`);
+  }
+
+  function handleSaveDocument() {
+    if (!generatedContent) return;
+    if (generatedDocumentId) {
+      router.push(`/dashboard/documents/${generatedDocumentId}`);
+    }
   }
 
   return (
@@ -57,7 +73,7 @@ export default function DocumentEditorPage() {
             <button
               onClick={() => router.back()}
               className="text-text-secondary hover:text-text-primary transition-colors"
-              aria-label="Back to projects"
+              aria-label="Back to documents"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -69,6 +85,19 @@ export default function DocumentEditorPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {generatedDocumentId && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleSaveDocument}
+                className="text-secondary font-medium"
+              >
+                <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Saved &rarr;
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="sm"
@@ -180,6 +209,12 @@ export default function DocumentEditorPage() {
                 />
               </div>
 
+              {generationError && (
+                <div className="p-3 bg-error/10 border border-error/30 rounded-lg text-error text-body-sm" role="alert">
+                  {generationError}
+                </div>
+              )}
+
               <Button
                 onClick={handleGenerate}
                 disabled={!prompt.trim() || isGenerating}
@@ -224,7 +259,7 @@ export default function DocumentEditorPage() {
               </div>
             )}
 
-            {!isGenerating && !generatedContent && (
+            {!isGenerating && !generatedContent && !generationError && (
               <div className="flex flex-col items-center justify-center h-full text-center">
                 <svg className="w-24 h-24 text-border mb-6" fill="none" viewBox="0 0 48 48" stroke="currentColor" strokeWidth={1}>
                   <path d="M24 4L4 14v20l20 10 20-10V14L24 4z" />

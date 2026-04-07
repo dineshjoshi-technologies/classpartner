@@ -66,6 +66,46 @@ export async function fetchWithAuth(
   return response;
 }
 
+export interface UsageStats {
+  documentsThisMonth: number;
+  documentLimit: number;
+  apiCallsTotal: number;
+  currentTier: string;
+}
+
+export interface Project {
+  id: string;
+  title: string;
+  description?: string;
+  type: string;
+  status: string;
+  userId: string;
+  createdAt: string;
+  updatedAt: string;
+  _count?: { documents: number };
+}
+
+export interface DocumentType {
+  id: string;
+  title: string;
+  content: string;
+  format: string;
+  projectId?: string;
+  project?: { title: string };
+  userId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface GenerateOptions {
+  prompt: string;
+  documentType?: string;
+  subject?: string;
+  citationStyle?: string;
+  wordCount?: number;
+  projectId?: string;
+}
+
 export const api = {
   async signup(email: string, password: string, name?: string) {
     const response = await fetch(`${API_URL}/api/auth/signup`, {
@@ -117,5 +157,119 @@ export const api = {
       throw new Error(data.error || 'Failed to update profile');
     }
     return data as User;
+  },
+
+  async getProjects(): Promise<Project[]> {
+    const response = await fetchWithAuth('/api/projects');
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to fetch projects');
+    return (data as { data: { projects: Project[] } }).data.projects;
+  },
+
+  async getProject(id: string): Promise<Project> {
+    const response = await fetchWithAuth(`/api/projects/${id}`);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to fetch project');
+    return (data as { data: Project }).data;
+  },
+
+  async createProject(data: { title: string; description?: string; type?: string }): Promise<Project> {
+    const response = await fetchWithAuth('/api/projects', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    const json = await response.json();
+    if (!response.ok) throw new Error(json.error || 'Failed to create project');
+    return (json as { data: Project }).data;
+  },
+
+  async updateProject(id: string, data: { title?: string; description?: string; status?: string }): Promise<Project> {
+    const response = await fetchWithAuth(`/api/projects/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    const json = await response.json();
+    if (!response.ok) throw new Error(json.error || 'Failed to update project');
+    return (json as { data: Project }).data;
+  },
+
+  async deleteProject(id: string): Promise<void> {
+    const response = await fetchWithAuth(`/api/projects/${id}`, { method: 'DELETE' });
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.error || 'Failed to delete project');
+    }
+  },
+
+  async getDocuments(projectId?: string): Promise<DocumentType[]> {
+    const url = projectId ? `/api/documents?projectId=${projectId}` : '/api/documents';
+    const response = await fetchWithAuth(url);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to fetch documents');
+    return (data as { data: { documents: DocumentType[] } }).data.documents;
+  },
+
+  async getDocument(id: string): Promise<DocumentType> {
+    const response = await fetchWithAuth(`/api/documents/${id}`);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to fetch document');
+    return (data as { data: DocumentType }).data;
+  },
+
+  async createDocument(data: { title: string; content: string; format?: string; projectId?: string }): Promise<DocumentType> {
+    const response = await fetchWithAuth('/api/documents', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    const json = await response.json();
+    if (!response.ok) throw new Error(json.error || 'Failed to create document');
+    return (json as { data: DocumentType }).data;
+  },
+
+  async updateDocument(id: string, data: { title?: string; content?: string }): Promise<DocumentType> {
+    const response = await fetchWithAuth(`/api/documents/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    const json = await response.json();
+    if (!response.ok) throw new Error(json.error || 'Failed to update document');
+    return (json as { data: DocumentType }).data;
+  },
+
+  async deleteDocument(id: string): Promise<void> {
+    const response = await fetchWithAuth(`/api/documents/${id}`, { method: 'DELETE' });
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.error || 'Failed to delete document');
+    }
+  },
+
+  async generateContent(options: GenerateOptions): Promise<{ content: string; documentId: string }> {
+    const response = await fetchWithAuth('/api/generate', {
+      method: 'POST',
+      body: JSON.stringify({
+        projectId: options.projectId,
+        type: options.documentType || 'essay',
+        topic: options.prompt,
+        instructions: [options.subject, options.citationStyle, `Target: ${options.wordCount} words`].filter(Boolean).join('. '),
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to generate content');
+    const payload = data as { data: { documentId: string; content: string; status: string } };
+    return { documentId: payload.data.documentId, content: payload.data.content };
+  },
+
+  async getUsageStats(): Promise<UsageStats> {
+    const response = await fetchWithAuth('/api/usage/me');
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to fetch usage stats');
+    const payload = data as { data: { tier: string; limits: { monthlyDocuments: number; dailyApiCalls: number }; usage: { monthDocuments: number; monthDocumentsRemaining: number; todayApiCalls: number; dailyRemaining: number } } };
+    return {
+      documentsThisMonth: payload.data.usage.monthDocuments,
+      documentLimit: payload.data.usage.monthDocuments + payload.data.usage.monthDocumentsRemaining,
+      apiCallsTotal: payload.data.usage.todayApiCalls,
+      currentTier: payload.data.tier,
+    };
   },
 };
