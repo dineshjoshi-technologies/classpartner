@@ -9,10 +9,10 @@ const router = Router();
 
 router.post('/:id', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { instructions } = req.body;
 
-    const document = await prisma.document.findFirst({
+    const document = await prisma.document.findUnique({
       where: { id, userId: req.user!.id },
     });
 

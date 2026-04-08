@@ -102,7 +102,7 @@ async function tryWithFailover<T>(
         return { result, keyUsed: key.id, modelUsed: model };
       } catch (error: unknown) {
         const status =
-          error instanceof Error && 'status' in (error as { status: number })
+          typeof error === 'object' && error !== null && 'status' in error
             ? (error as { status: number }).status
             : null;
 
@@ -113,7 +113,7 @@ async function tryWithFailover<T>(
             await prisma.apiKey.update({
               where: { id: key.id },
               data: {
-                errorCount: { increment: 1 },
+                errorCount: 1,
                 lastErrorAt: new Date(),
               },
             });

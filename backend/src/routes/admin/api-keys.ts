@@ -128,7 +128,7 @@ router.get('/', requireAdmin, async (req: AuthRequest, res: Response, next: Next
 
 router.delete('/:id', requireAdmin, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
 
     const apiKey = await prisma.apiKey.findFirst({
       where: {
@@ -158,7 +158,7 @@ router.delete('/:id', requireAdmin, async (req: AuthRequest, res: Response, next
 
 router.patch('/:id', requireAdmin, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { isActive, name, usageLimit } = req.body;
 
     const apiKey = await prisma.apiKey.findFirst({

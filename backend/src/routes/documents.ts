@@ -56,9 +56,9 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
 
 router.get('/:id', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
 
-    const document = await prisma.document.findFirst({
+    const document = await prisma.document.findUnique({
       where: { id, userId: req.user!.id },
     });
 
@@ -77,9 +77,9 @@ router.get('/:id', async (req: AuthRequest, res: Response, next: NextFunction) =
 
 router.get('/project/:projectId', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { projectId } = req.params;
+    const projectId = req.params.projectId as string;
 
-    const project = await prisma.project.findFirst({
+    const project = await prisma.project.findUnique({
       where: { id: projectId, userId: req.user!.id },
     });
 

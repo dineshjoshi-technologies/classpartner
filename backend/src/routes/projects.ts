@@ -36,9 +36,9 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
 
 router.get('/:id', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
 
-    const project = await prisma.project.findFirst({
+    const project = await prisma.project.findUnique({
       where: { id, userId: req.user!.id },
       include: { _count: { select: { documents: true } } },
     });
@@ -108,10 +108,10 @@ router.post('/', async (req: AuthRequest, res: Response, next: NextFunction) => 
 
 router.patch('/:id', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { title, description, status } = req.body;
 
-    const project = await prisma.project.findFirst({
+    const project = await prisma.project.findUnique({
       where: { id, userId: req.user!.id },
     });
 
@@ -148,9 +148,9 @@ router.patch('/:id', async (req: AuthRequest, res: Response, next: NextFunction)
 
 router.delete('/:id', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
 
-    const project = await prisma.project.findFirst({
+    const project = await prisma.project.findUnique({
       where: { id, userId: req.user!.id },
     });
 
@@ -158,7 +158,7 @@ router.delete('/:id', async (req: AuthRequest, res: Response, next: NextFunction
       throw new AppError('Project not found', 404);
     }
 
-    await prisma.project.delete({ where: { id } });
+    await prisma.project.delete({ where: { id: project.id } });
 
     res.json({ success: true });
   } catch (error) {
